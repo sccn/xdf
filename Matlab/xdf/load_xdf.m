@@ -1,15 +1,80 @@
-function [streams,fileheader] = load_xdf(filename)
+function [streams,fileheader] = load_xdf(filename,varargin)
 % Import an XDF file.
-% [Streams,FileHeader] = load_xdf(Filename)
+% [Streams,FileHeader] = load_xdf(Filename, Options...)
 %
-% This is a simple MATLAB importer for mult-stream XDF (Extensible Data Format) recordings. All
+% This is a MATLAB importer for mult-stream XDF (Extensible Data Format) recordings. All
 % information covered by the XDF 1.0 specification is imported, plus any additional meta-data
 % associated with streams or with the container file itself.
 %
 % See https://github.com/sccn/xdf/ for more information on XDF.
 %
+% The function supports several further features, such as compressed XDF archives, robust
+% time synchronization, support for breaks in the data, as well as some other defects.
+%
 % In:
 %   Filename : name of the file to import (*.xdf or *.xdfz)
+%
+%   Options... : A list of optional name-value arguments for special use cases. The allowed names 
+%                are listed in the following:
+%
+%                Parameters that control various processing features:
+%
+%                'Verbose' : Whether to print verbose diagnostics. (default: false)
+%
+%                'HandleClockSynchronization' : Whether to enable clock synchronization based on
+%                                               ClockOffset chunks. (default: true)
+%
+%                'HandleJitterRemoval' : Whether to perform jitter removal for regularly sampled 
+%                                        streams. (default: true)
+%
+%                'OnChunk' : Function that is called for each chunk of data as it
+%                            is being retrieved from the file; the function is allowed to modify the
+%                            data (for example, sub-sample it). The four input arguments are 1) the
+%                            matrix of [#channels x #samples] values (either numeric or 2d cell
+%                            array of strings), 2) the vector of unprocessed local time stamps (one
+%                            per sample), 3) the info struct for the stream (same as the .info field
+%                            in the final output, buth without the .effective_srate sub-field), and
+%                            4) the scalar stream number (1-based integers). The three return values
+%                            are 1) the (optionally modified) data, 2) the (optionally modified)
+%                            time stamps, and 3) the (optionally modified) header (default: []).
+%
+%                Parameters for advanced failure recovery in clock synchronization:
+%
+%                'HandleClockResets' : Whether the importer should check for potential resets of the
+%                                      clock of a stream (e.g. computer restart during recording, or
+%                                      hot-swap). Only useful if the recording system supports
+%                                      recording under such circumstances. (default: true)
+%
+%                'ClockResetThresholdStds' : A clock reset must be accompanied by a ClockOffset
+%                                            chunk being delayed by at least this many standard
+%                                            deviations from the distribution. (default: 5)
+%
+%                'ClockResetThresholdSeconds' : A clock reset must be accompanied by a ClockOffset
+%                                               chunk being delayed by at least this many seconds.
+%                                               (default: 5)
+%
+%                'ClockResetThresholdOffsetStds' : A clock reset must be accompanied by a
+%                                                  ClockOffset difference that lies at least this many
+%                                                  standard deviations from the distribution. (default: 10)
+%
+%                'ClockResetThresholdOffsetSeconds' : A clock reset must be accompanied by a
+%                                                     ClockOffset difference that is at least this
+%                                                     many seconds away from the median. (default: 1)
+%
+%                'ClockResetMaxJitter' : Maximum tolerable jitter (in seconds of error) for clock
+%                                        reset handling. (default: 5)
+%
+%                Parameters for jitter removal in the presence of data breaks:
+%
+%                'JitterBreakThresholdSeconds' : An interruption in a regularly-sampled stream of at least this
+%                                                many seconds will be considered as a potential break (if also
+%                                                the BreakThresholdSamples is crossed) and multiple segments
+%                                                will be returned. Default: 1
+%
+%                'JitterBreakThresholdSamples' : An interruption in a regularly-sampled stream of at least this
+%                                                many samples will be considered as a potential break (if also
+%                                                the BreakThresholdSeconds is crossed) and multiple segments
+%                                                will be returned. Default: 500
 %
 % Out:
 %   Streams : cell array of structs, one for each stream; the structs have the following content:
@@ -43,10 +108,6 @@ function [streams,fileheader] = load_xdf(filename)
 % Examples:
 %   % load the streams contained in a given XDF file
 %   streams = load_xdf('C:\Recordings\myrecording.xdf')
-%
-% Notes:
-%   A somewhat higher-quality clock drift post-processing is performed when the Statistics toolbox 
-%   is present.
 %
 % License:
 %     This file is covered by the BSD license.
@@ -84,13 +145,44 @@ function [streams,fileheader] = load_xdf(filename)
 %                                Contains portions of xml2struct Copyright (c) 2010, Wouter Falkena,
 %                                ASTI, TUDelft, 21-08-2010
 %
-%                                version 1.08
-LIBVERSION = '1.08';
+%                                version 1.11
+LIBVERSION = '1.11';
 
+% check inputs
+opts = cell2struct(varargin(2:2:end),varargin(1:2:end),2);
+if ~isfield(opts,'OnChunk')
+    opts.OnChunk = []; end
+if ~isfield(opts,'Verbose')
+    opts.Verbose = false; end
+if ~isfield(opts,'HandleClockSynchronization')
+    opts.HandleClockSynchronization = true; end
+if ~isfield(opts,'HandleClockResets')
+    opts.HandleClockResets = true; end
+if ~isfield(opts,'HandleJitterRemoval')
+    opts.HandleJitterRemoval = true; end
+if ~isfield(opts,'JitterBreakThresholdSeconds')
+    opts.JitterBreakThresholdSeconds = 1; end
+if ~isfield(opts,'JitterBreakThresholdSamples')
+    opts.JitterBreakThresholdSamples = 500; end
+if ~isfield(opts,'ClockResetThresholdSeconds')
+    opts.ClockResetThresholdSeconds = 5; end
+if ~isfield(opts,'ClockResetThresholdStds')
+    opts.ClockResetThresholdStds = 5; end
+if ~isfield(opts,'ClockResetThresholdOffsetSeconds')
+    opts.ClockResetThresholdOffsetSeconds = 1; end
+if ~isfield(opts,'ClockResetThresholdOffsetStds')
+    opts.ClockResetThresholdOffsetStds = 10; end
+if ~isfield(opts,'WinsorThreshold')
+    opts.WinsorThreshold = 0.0001; end
+if ~isfield(opts,'ClockResetMaxJitter')
+    opts.ClockResetMaxJitter = 5; end
 if ~exist(filename,'file')
     error(['The file "' filename '" does not exist.']); end
-    
-% uncompress if necessary
+
+if opts.Verbose
+    disp(['Importing XDF file ' filename '...']); end
+
+% uncompress if necessary (note: "bonus" feature, not part of the XDF 1.0 spec)
 [p,n,x] = fileparts(filename);
 if strcmp(x,'.xdfz')
     % idea for this type of approach by Michael Kleder
@@ -105,16 +197,16 @@ if strcmp(x,'.xdfz')
     src.close();
 end
 
-% open the file (and make sure that we don't forget to close it)
-f = fopen(filename,'r','ieee-le.l64');
-closer = onCleanup(@()close_file(f,filename));
+streams = {};                                   % cell array of returned streams (in the order of appearance in the file)
+idmap = sparse(2^31-1,1);                       % remaps stream id's onto indices in streams
+temp = struct();                                % struct array of temporary per-stream information
+fileheader = struct();                          % the file header
+f = fopen(filename,'r','ieee-le.l64');          % file handle
+closer = onCleanup(@()close_file(f,filename));  % object that closes the file when the function exits
 
-streams = {};               % cell array of returned streams (in the order of appearance in the file)
-idmap = sparse(2^31-1,1);   % remaps stream id's onto indices in streams
-temp = struct();            % struct array of temporary per-stream information
-fileheader = struct();      % the file header
 
-% check whether we have a working mex file for the inner loop
+% there is a fast C mex file for the inner loop, but it's 
+% not necessarily available for every platform
 have_mex = exist('load_xdf_innerloop','file');
 if ~have_mex
     disp(['NOTE: apparently you are missing a compiled binary version of the inner loop code.',...
@@ -135,24 +227,25 @@ if ~have_mex
     end
 end
 
-% === read the file ===
+% ======================
+% === parse the file ===
+% ======================
 
-% [MagicCode]
+% read [MagicCode]
 if ~strcmp(fread(f,4,'*char')','XDF:')
     error(['This is not a valid XDF file (' filename ').']); end
 
 % for each chunk...
 while 1
-    % [NumLengthBytes], [Length]
-    len = read_varlen_int(f);
+    % read [NumLengthBytes], [Length]
+    len = double(read_varlen_int(f));
     if ~len
         break; end
-    % [Tag]
+    % read [Tag]
     switch fread(f,1,'uint16')
-        % [Samples] chunk
-        case 3
+        case 3 % read [Samples] chunk
             try
-                % [StreamId]
+                % read [StreamId]
                 id = idmap(fread(f,1,'uint32'));
                 if have_mex
                     % read the chunk data at once
@@ -160,8 +253,8 @@ while 1
                     % run the mex kernel
                     [values,timestamps] = load_xdf_innerloop(data, temp(id).chns, temp(id).readfmt, temp(id).sampling_interval, temp(id).last_timestamp);
                     temp(id).last_timestamp = timestamps(end);
-                else
-                    % [NumSampleBytes], [NumSamples]
+                else % fallback MATLAB implementation
+                    % read [NumSampleBytes], [NumSamples]
                     num = read_varlen_int(f);
                     % allocate space
                     timestamps = zeros(1,num);
@@ -181,33 +274,37 @@ while 1
                         % read the values
                         if strcmp(temp(id).readfmt,'*string')
                             for v = 1:size(values,1)
-                                values{v,s} = fread(f,read_varlen_int(f),'*char')'; end
+                                values{v,s} = fread(f,double(read_varlen_int(f)),'*char')'; end
                         else
                             values(:,s) = fread(f,size(values,1),temp(id).readfmt);
                         end
                         temp(id).last_timestamp = timestamps(s);
                     end
                 end
+                % optionally send through the OnChunk function
+                if ~isempty(opts.OnChunk)
+                    [values,timestamps,streams{id}] = opts.OnChunk(values,timestamps,streams{id},id); end %#ok<*AGROW>
                 % append to the time series...
                 temp(id).time_series{end+1} = values;
                 temp(id).time_stamps{end+1} = timestamps;
             catch e
-                % an error occurred (perhaps a chopped-off file): emit a warning 
+                % an error occurred (perhaps a chopped-off file): emit a warning
                 % and return the file up to this point
                 warning(e.identifier,e.message);
-                break;                
+                break;
             end
-        % [StreamHeader] chunk
-        case 2
-            % [StreamId]
+        case 2 % read [StreamHeader] chunk
+            % read [StreamId]
             streamid = fread(f,1,'uint32');
             id = length(streams)+1;
-            idmap(streamid) = id;
-            % [Content]
+            idmap(streamid) = id; %#ok<SPRIX>
+            % read [Content]
             header = parse_xml_struct(fread(f,len-6,'*char')');
             streams{id} = header;
+            if opts.Verbose
+                fprintf(['  found stream ' header.info.name '\n']); end
             % generate a few temporary fields
-            temp(id).chns = str2num(header.info.channel_count);
+            temp(id).chns = str2num(header.info.channel_count); %#ok<*ST2NM>
             temp(id).srate = str2num(header.info.nominal_srate);
             temp(id).last_timestamp = 0;
             temp(id).time_series = {};
@@ -221,116 +318,218 @@ while 1
             end
             % fread parsing format for data values
             temp(id).readfmt = ['*' header.info.channel_format];
-            if strcmp(temp(id).readfmt,'*double64')
-                temp(id).readfmt = 'double'; end               
-        % [StreamFooter] chunk
-        case 6
-            % [StreamId]
+            if strcmp(temp(id).readfmt,'*double64') && ~have_mex
+                temp(id).readfmt = '*double'; end % for fread()
+        case 6 % read [StreamFooter] chunk
+            % read [StreamId]
             id = idmap(fread(f,1,'uint32'));
-            % [Content]
+            % read [Content]
             footer = parse_xml_struct(fread(f,len-6,'*char')');
             streams{id} = hlp_superimposedata(footer,streams{id});
-        % [FileHeader] chunk
-        case 1            
+        case 1 % read [FileHeader] chunk
             fileheader = parse_xml_struct(fread(f,len-2,'*char')');
-        % [ClockOffset] chunk
-        case 4
-            % [StreamId]
+        case 4 % read [ClockOffset] chunk
+            % read [StreamId]
             id = idmap(fread(f,1,'uint32'));
-            % [CollectionTime]
+            % read [CollectionTime]
             temp(id).clock_times(end+1) = fread(f,1,'double');
-            % [OffsetValue]
+            % read [OffsetValue]
             temp(id).clock_values(end+1) = fread(f,1,'double');
         otherwise
-            % skip other chunks (Boundary, ...)
+            % skip other chunk types (Boundary, ...)
             fread(f,len-2,'*uint8');
+    end
+end
+    
+% concatenate the signal across chunks
+for k=1:length(temp)
+    try
+        temp(k).time_series = [temp(k).time_series{:}];
+        temp(k).time_stamps = [temp(k).time_stamps{:}];
+    catch e
+        disp(['Could not concatenate time series for stream ' streams{k}.info.name '; skipping.']);
+        disp(['Reason: ' e.message]);
+        temp(k).time_series = [];
+        temp(k).time_stamps = [];
     end
 end
 
 
-% === do some advanced post-processing on the result ===
+% ===================================================================
+% === perform (fault-tolerant) clock synchronization if requested ===
+% ===================================================================
 
-for k=1:length(temp)
-    % concatenate the signal
-    temp(k).time_series = [temp(k).time_series{:}];
-    temp(k).time_stamps = [temp(k).time_stamps{:}];
-    if ~isempty(temp(k).time_stamps) && ~isempty(temp(k).time_series)
-        try
-            clock_times = temp(k).clock_times;
-            clock_values = temp(k).clock_values;
-            % calculate clock offset mapping
+if opts.HandleClockSynchronization
+    if opts.Verbose
+        disp('  performing clock synchronization...'); end
+    for k=1:length(temp)
+        if ~isempty(temp(k).time_stamps)
             try
-                mapping = robustfit(clock_times,clock_values);
-            catch %#ok<CTCH>
-                try
-                    mapping = regress(clock_values',[ones(length(clock_times),1) clock_times']);
-                catch %#ok<CTCH>
-                    mapping = clock_values / [ones(1,length(clock_times)); clock_times];
+                clock_times = temp(k).clock_times;
+                clock_values = temp(k).clock_values;
+            catch
+                disp(['No clock offsets were available for stream "' streams{k}.info.name '"']);
+                continue;
+            end
+            
+            % detect clock resets (e.g., computer restarts during recording) if requested
+            % this is only for cases where "everything goes wrong" during recording
+            % note that this is a fancy feature that is not needed for normal XDF compliance
+            if opts.HandleClockResets
+                % first detect potential breaks in the synchronization data; this is only necessary when the
+                % importer should be able to deal with recordings where the computer that served a stream
+                % was restarted or hot-swapped during an ongoing recording, or the clock was reset otherwise
+                time_diff = diff(clock_times);
+                value_diff = abs(diff(clock_values));
+                % points where a glitch in the timing of successive clock measurements happened
+                time_glitch = (time_diff < 0 | (((time_diff - median(time_diff)) ./ mad(time_diff,1)) > opts.ClockResetThresholdStds & ...
+                    ((time_diff - median(time_diff)) > opts.ClockResetThresholdSeconds)));
+                % points where a glitch in successive clock value estimates happened
+                value_glitch = (value_diff - median(value_diff)) ./ mad(value_diff,1) > opts.ClockResetThresholdOffsetStds & ...
+                    (value_diff - median(value_diff)) > opts.ClockResetThresholdOffsetSeconds;
+                % points where both a time glitch and a value glitch co-occur are treated as resets
+                resets_at = time_glitch & value_glitch;
+                % determine the [begin,end] index ranges between resets
+                if any(resets_at)
+                    tmp = find(resets_at)';
+                    tmp = [tmp tmp+1]';
+                    tmp = [1 tmp(:)' length(resets_at)];
+                    ranges = num2cell(reshape(tmp,2,[])',2);
+                    if opts.Verbose
+                        disp(['  found ' num2str(nnz(resets_at)) ' clock resets in stream ' streams{k}.info.name '.']); end
+                else
+                    ranges = {[1,length(clock_times)]};
+                end
+            else
+                % otherwise we just assume that there are no clock resets
+                ranges = {[1,length(clock_times)]};
+            end
+            
+            % calculate clock offset mappings for each data range
+            mappings = {};
+            for r=1:length(ranges)
+                idx = ranges{r};
+                if idx(1) ~= idx(2)
+                    % to accomodate the Winsorizing threshold (in seconds) we rescale the data (robust_fit sets it to 1 unit)
+                    mappings{r} = robust_fit([ones(idx(2)-idx(1)+1,1) clock_times(idx(1):idx(2))']/opts.WinsorThreshold, clock_values(idx(1):idx(2))'/opts.WinsorThreshold);
+                else
+                    mappings{r} = [clock_values(idx(1)) 0]; % just one measurement
                 end
             end
-            % apply offset correction
-            temp(k).time_stamps = temp(k).time_stamps + (mapping(1) + mapping(2)*temp(k).time_stamps);
-        catch %#ok<CTCH>
-            disp(['No clock offsets were available for stream "' streams{k}.info.name '"']);
-        end
-        
-        % do some fix-ups if the time series is regularly sampled
-        if temp(k).srate
-            segment_threshold = [1,500]; % time that has to pass without data from a regularly sampled
-            % stream to assume that the stream is fragmented into segments
-            % (breaks shorter than this will be assumed to be time-stamping
-            % glitches) in seconds and in samples (both thresholds have to
-            % be exceeded)
             
-            % check for segment breaks
+            if length(ranges) == 1
+                % apply the correction to all time stamps
+                temp(k).time_stamps = temp(k).time_stamps + (mappings{1}(1) + mappings{1}(2)*temp(k).time_stamps);
+            else
+                % if there are data segments measured with different clocks we need to
+                % determine, for any time stamp lying between two segments, to which of the segments it belongs
+                clock_segments = zeros(size(temp(k).time_stamps));  % the segment index to which each stamp belongs                
+                begin_of_segment = 1;                               % first index into time stamps that belongs to the current segment
+                end_of_segment = NaN; %#ok<NASGU>                   % last index into time stamps that belongs to the current segment
+                for r=1:length(ranges)-1
+                    cur_end_time = clock_times(ranges{r}(2));       % time at which the current segment ends
+                    next_begin_time = clock_times(ranges{r+1}(1));  % time at which the next segment begins
+                    % get the data that is not yet processed
+                    remaining_indices = begin_of_segment:length(temp(k).time_stamps);
+                    if isempty(remaining_indices)
+                        break; end
+                    remaining_data = temp(k).time_stamps(remaining_indices);
+                    if next_begin_time > cur_end_time
+                        % clock jumps forward: the end of the segment is where the data time stamps
+                        % lie closer to the next segment than the current in time
+                        end_of_segment = remaining_indices(min(find([abs(remaining_data-cur_end_time) > abs(remaining_data-next_begin_time),true],1)-1,length(remaining_indices)));
+                    else
+                        % clock jumps backward: the end of the segment is where the data time stamps
+                        % jump back by more than the max conceivable jitter (as any negative delta is jitter)
+                        end_of_segment = remaining_indices(min(find([diff(remaining_data) < -opts.ClockResetMaxJitter,true],1),length(remaining_indices)));
+                    end
+                    % assign the segment of data points to the current range
+                    % go to next segment
+                    clock_segments(begin_of_segment:end_of_segment) = r;
+                    begin_of_segment = end_of_segment+1;
+                end
+                % assign all remaining time stamps to the last segment
+                clock_segments(begin_of_segment:end) = length(ranges);                
+                % apply corrections on a per-segment basis
+                for r=1:length(ranges)
+                    temp(k).time_stamps(clock_segments==r) = temp(k).time_stamps(clock_segments==r) + (mappings{r}(1) + mappings{r}(2)*temp(k).time_stamps(clock_segments==r)); end
+            end
+        end
+    end
+end
+
+
+% ===========================================
+% === perform jitter removal if requested ===
+% ===========================================
+
+if opts.HandleJitterRemoval
+    % jitter removal is a bonus feature that yields linearly increasing timestamps from data 
+    % where samples had been time stamped with some jitter (e.g., due to operating system
+    % delays)
+    if opts.Verbose
+        disp('  performing jitter removal...'); end
+    for k=1:length(temp)
+        if ~isempty(temp(k).time_stamps) && temp(k).srate
+            % identify breaks in the data
             diffs = diff(temp(k).time_stamps);
-            breaks_at = diffs > max(segment_threshold(1),segment_threshold(2)*temp(k).sampling_interval);
+            breaks_at = diffs > max(opts.JitterBreakThresholdSeconds,opts.JitterBreakThresholdSamples*temp(k).sampling_interval);
             if any(breaks_at)
                 % turn the break mask into a cell array of [begin,end] index ranges
                 tmp = find(breaks_at)';
                 tmp = [tmp tmp+1]';
                 tmp = [1 tmp(:)' length(breaks_at)];
                 ranges = num2cell(reshape(tmp,2,[])',2);
+                if opts.Verbose
+                    disp(['  found ' num2str(nnz(breaks_at)) ' data breaks in stream ' streams{k}.info.name '.']); end
             else
                 ranges = {[1,length(temp(k).time_stamps)]};
             end
             
-            % calculate some meta-data about the segments
+            % process each segment separately
             segments = repmat(struct(),1,length(ranges));
             for r=1:length(ranges)
                 range = ranges{r};
                 segments(r).num_samples = range(2)-range(1)+1;
                 segments(r).index_range = range;
-                % re-calculate the time stamps within the range (linearly interpolated)
                 if segments(r).num_samples > 0
                     indices = segments(r).index_range(1):segments(r).index_range(2);
-                    stamps = temp(k).time_stamps(indices);
-                    try
-                        mapping = regress(stamps',[ones(length(indices),1) indices']);
-                    catch %#ok<CTCH>
-                        mapping = stamps / [ones(1,length(indices)); indices];
-                    end
+                    % regress out the jitter
+                    mapping = temp(k).time_stamps(indices) / [ones(1,length(indices)); indices];
                     temp(k).time_stamps(indices) = mapping(1) + mapping(2) * indices;
                 end
+                % calculate some other meta-data about the segments
                 segments(r).t_begin = temp(k).time_stamps(range(1));
                 segments(r).t_end = temp(k).time_stamps(range(2));
                 segments(r).duration = segments(r).t_end - segments(r).t_begin;
-                segments(r).effective_srate = segments(r).num_samples / segments(r).duration;
+                segments(r).effective_srate = (segments(r).num_samples-1)/ segments(r).duration;
             end
             
             % calculate the weighted mean sampling rate over all segments
-            temp(k).effective_rate = sum(bsxfun(@times,[segments.effective_srate],[segments.num_samples]/sum([segments.num_samples])));
+            temp(k).effective_rate = sum(bsxfun(@times,[segments.effective_srate],[segments.num_samples]/sum([segments.num_samples])));            
             
             % transfer the information into the output structs
             streams{k}.info.effective_srate = temp(k).effective_rate;
             streams{k}.segments = segments;
         end
     end
+else
+    % calculate effective sampling rate
+    for k=1:length(temp)
+        temp(k).effective_srate = length(temp(k).time_stamps) / (temp(k).time_stamps(end) - temp(k).time_stamps(1)); end
+end
+
+% copy the information into the output
+for k=1:length(temp)
     streams{k}.time_series = temp(k).time_series;
     streams{k}.time_stamps = temp(k).time_stamps;
 end
-
 end
+
+
+% ========================
+% === helper functions ===
+% ========================
 
 % read a variable-length integer
 function num = read_varlen_int(f)
@@ -345,7 +544,7 @@ try
         otherwise
             error('Invalid variable-length integer encountered.');
     end
-catch
+catch %#ok<*CTCH>
     num = 0;
 end
 end
@@ -359,8 +558,6 @@ if strfind(filename,'_temp_uncompressed.xdf')
 end
 
 
-% --- helper functions ---
-
 % parse a simplified (attribute-free) subset of XML into a MATLAB struct
 function result = parse_xml_struct(str)
 import org.xml.sax.InputSource
@@ -370,7 +567,7 @@ tmp = InputSource();
 tmp.setCharacterStream(StringReader(str));
 result = parseChildNodes(xmlread(tmp));
 
-    % this is part of xml2struct (slightly simplified)
+% this is part of xml2struct (slightly simplified)
     function [children,ptext] = parseChildNodes(theNode)
         % Recurse over node children.
         children = struct;
@@ -407,7 +604,7 @@ result = parseChildNodes(xmlread(tmp));
         end
     end
 
-    % this is part of xml2struct (slightly simplified)
+% this is part of xml2struct (slightly simplified)
     function [text,name,childs] = getNodeData(theNode)
         % Create structure of node info.
         name = char(theNode.getNodeName);
@@ -424,6 +621,45 @@ result = parseChildNodes(xmlread(tmp));
             end
         end
     end
+end
+
+
+function x = robust_fit(A,y,rho,iters)
+% Perform a robust linear regression using the Huber loss function.
+% x = robust_fit(A,y,rho,iters)
+%
+% Input:
+%   A : design matrix
+%   y : target variable
+%   rho : augmented Lagrangian variable (default: 1)
+%   iters : number of iterations to perform (default: 1000)
+%
+% Output:
+%   x : solution for x
+%
+% Notes:
+%   solves the following problem via ADMM for x:
+%     minimize 1/2*sum(huber(A*x - y))
+%
+% Based on the ADMM Matlab codes also found at:
+%   http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
+%
+%                                Christian Kothe, Swartz Center for Computational Neuroscience, UCSD
+%                                2013-03-04
+
+if ~exist('rho','var')
+    rho = 1; end
+if ~exist('iters','var')
+    iters = 1000; end
+Aty = A'*y;
+L = sparse(chol(A'*A,'lower')); U = L';
+z = zeros(size(y)); u = z;
+for k = 1:iters
+    x = U \ (L \ (Aty + A'*(z - u)));
+    d = A*x - y + u;
+    z = rho/(1+rho)*d + 1/(1+rho)*max(0,(1-(1+1/rho)./abs(d))).*d;
+    u = d - z;
+end
 end
 
 
@@ -448,7 +684,6 @@ function res = hlp_superimposedata(varargin)
 
 % first, compactify the data by removing the empty items
 compact = varargin(~cellfun('isempty',varargin));
-
 % start with the last data structure, then merge the remaining data structures into it (in reverse
 % order as this avoids having to grow arrays incrementally in typical cases)
 res = compact{end};
@@ -456,10 +691,8 @@ for k=length(compact)-1:-1:1
     res = merge(res,compact{k}); end
 end
 
-
-% merge data structures A and B
 function A = merge(A,B)
-
+% merge data structures A and B
 if iscell(A) && iscell(B)
     % make sure that both have the same number of dimensions
     if ndims(A) > ndims(B)
@@ -467,7 +700,6 @@ if iscell(A) && iscell(B)
     elseif ndims(A) < ndims(B)
         A = grow_cell(A,size(B));
     end
-    
     % make sure that both have the same size
     if all(size(B)==size(A))
         % we're fine
@@ -483,10 +715,8 @@ if iscell(A) && iscell(B)
         A = grow_cell(A,M);
         B = grow_cell(B,M);
     end
-    
     % find all non-empty elements in B
     idx = find(~cellfun(@(x)isequal(x,[]),B));
-    
     if ~isempty(idx)
         % check if any of these is occupied in A
         clean = cellfun('isempty',A(idx));
@@ -535,11 +765,9 @@ elseif isstruct(A) && isstruct(B)
             B(1).(fn{1}) = []; end
         B = orderfields(B,A);
     end
-    
     % that being established, convert them to cell arrays, merge their cell arrays, and convert back to structs
     merged = merge(struct2cell(A),struct2cell(B));
     A = cell2struct(merged,fieldnames(A),1);
-    
 elseif isstruct(A) && ~isstruct(B)
     if ~isempty(B)
         error('One of the sub-items is a struct, and the other one is of a non-struct type.');
@@ -577,9 +805,11 @@ elseif ~isequal(A,B)
 end
 end
 
+
+function C = grow_cell(C,idx)
 % grow a cell array to accomodate a particular index
 % (assuming that this index is not contained in the cell array yet)
-function C = grow_cell(C,idx)
 tmp = sprintf('%i,',idx);
 eval(['C{' tmp(1:end-1) '} = [];']);
 end
+
