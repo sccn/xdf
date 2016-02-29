@@ -28,6 +28,9 @@ function raw = eeg_load_xdf(filename, varargin)
 args = hlp_varargin2struct(varargin,'streamname','','streamtype','EEG','effective_rate',false, ...
     'exclude_markerstreams',{});
 
+% Add the folder containing load_xdf to the path.
+addpath(fullfile(fileparts(mfilename('fullpath')), 'xdf'));
+
 % first load the .xdf file
 streams = load_xdf(filename);
 
