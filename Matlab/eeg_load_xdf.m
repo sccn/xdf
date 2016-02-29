@@ -28,6 +28,10 @@ function raw = eeg_load_xdf(filename, varargin)
 args = hlp_varargin2struct(varargin,'streamname','','streamtype','EEG','effective_rate',false, ...
     'exclude_markerstreams',{});
 
+% Add the folder containing load_xdf to the path.
+[this_path, this_name, this_ext] = fileparts(mfilename('fullpath'));
+addpath(fullfile(this_path, 'xdf'));
+
 % first load the .xdf file
 streams = load_xdf(filename);
 
@@ -80,17 +84,18 @@ try
             chanlocs(c).labels = chn.label; end            
         if isfield(chn,'type')
             chanlocs(c).type = chn.type; end
-        try
-            chanlocs(c).X = str2num(chn.location.X)/1000;
-            chanlocs(c).Y = str2num(chn.location.Y)/1000;
-            chanlocs(c).Z = str2num(chn.location.Z)/1000;
-            [chanlocs(c).sph_theta,chanlocs(c).sph_phi,chanlocs(c).sph_radius] = cart2sph(chanlocs(c).X,chanlocs(c).Y,chanlocs(c).Z);
-            [chanlocs(c).theta,chanlocs(c).radius] = cart2pol(chanlocs(c).X,chanlocs(c).Y);
-        catch
-            [chanlocs(c).X,chanlocs(c).Y,chanlocs(c).Z,chanlocs(c).sph_theta,chanlocs(c).sph_phi,chanlocs(c).sph_radius,chanlocs(c).theta,chanlocs(c).radius] = deal([]);
+        if isfield(chn,'location')
+            try
+                chanlocs(c).X = str2num(chn.location.X)/1000;
+                chanlocs(c).Y = str2num(chn.location.Y)/1000;
+                chanlocs(c).Z = str2num(chn.location.Z)/1000;
+                [chanlocs(c).sph_theta,chanlocs(c).sph_phi,chanlocs(c).sph_radius] = cart2sph(chanlocs(c).X,chanlocs(c).Y,chanlocs(c).Z);
+                [chanlocs(c).theta,chanlocs(c).radius] = cart2pol(chanlocs(c).X,chanlocs(c).Y);
+                chanlocs(c).urchan = c;
+                chanlocs(c).ref = '';
+            catch
+            end
         end
-        chanlocs(c).urchan = c;
-        chanlocs(c).ref = '';
     end
     raw.chaninfo.nosedir = '+Y';    
 catch e

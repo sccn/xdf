@@ -6,7 +6,7 @@ function [streams,fileheader] = load_xdf(filename)
 % information covered by the XDF 1.0 specification is imported, plus any additional meta-data
 % associated with streams or with the container file itself.
 %
-% See http://code.google.com/p/xdf/ for more information on XDF.
+% See https://github.com/sccn/xdf/ for more information on XDF.
 %
 % In:
 %   Filename : name of the file to import (*.xdf or *.xdfz)
@@ -85,6 +85,7 @@ function [streams,fileheader] = load_xdf(filename)
 %                                ASTI, TUDelft, 21-08-2010
 %
 %                                version 1.08
+LIBVERSION = '1.08';
 
 if ~exist(filename,'file')
     error(['The file "' filename '" does not exist.']); end
@@ -116,7 +117,23 @@ fileheader = struct();      % the file header
 % check whether we have a working mex file for the inner loop
 have_mex = exist('load_xdf_innerloop','file');
 if ~have_mex
-    disp('NOTE: apparently you are missing a compiled binary version of the inner loop code. Using the slow MATLAB code instead.'); end
+    disp(['NOTE: apparently you are missing a compiled binary version of the inner loop code.',...
+        ' Attempting to download...']);
+
+    fname = ['load_xdf_innerloop.' mexext];
+    mex_url = ['https://github.com/sccn/xdf/releases/download/v',...
+        LIBVERSION, '/', fname];
+    [this_path, this_name, this_ext] = fileparts(mfilename('fullpath'));
+    try
+        have_mex = true;
+        websave(fullfile(this_path, fname), mex_url);
+    catch ME
+        disp(['Unable to download the compiled binary version for your platform.',...
+        ' Using the slow MATLAB code instead.']);
+        have_mex = false;
+        %rethrow(ME);
+    end
+end
 
 % === read the file ===
 
