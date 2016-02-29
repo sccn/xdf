@@ -26,7 +26,7 @@ def zipdir(dir2zip, zipout, expand_dir = None):
     # zipout is zipfile handle
     for root, dirs, files in os.walk(dir2zip):
         for fname in files:
-            if fname is not '.DS_Store':
+            if not fname.startswith('.'):
                 if expand_dir:
                     split_path = list(os.path.split(root))
                     split_path[0] = expand_dir
@@ -60,10 +60,10 @@ def main(argv):
     filename = inspect.getframeinfo(inspect.currentframe()).filename
     root_path = os.path.dirname(os.path.abspath(filename))
     mfile_path = os.path.join(root_path, 'Matlab', 'xdf', 'load_xdf.m')
-    versionFound = False
+    version_found = False
     with open(mfile_path) as f:
         for line in f:
-            if not versionFound:
+            if not version_found:
                 m = re.match("LIBVERSION\s=\s'(\d+\.\d+)';", line)
                 if m:
                     mfile_version = m.group(1)
