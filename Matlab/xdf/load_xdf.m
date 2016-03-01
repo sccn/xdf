@@ -145,8 +145,8 @@ function [streams,fileheader] = load_xdf(filename,varargin)
 %                                Contains portions of xml2struct Copyright (c) 2010, Wouter Falkena,
 %                                ASTI, TUDelft, 21-08-2010
 %
-%                                version 1.11
-LIBVERSION = '1.11';
+%                                version 1.12
+LIBVERSION = '1.12';
 
 % check inputs
 opts = cell2struct(varargin(2:2:end),varargin(1:2:end),2);
@@ -226,6 +226,7 @@ if ~have_mex
         %rethrow(ME);
     end
 end
+
 
 % ======================
 % === parse the file ===
@@ -502,7 +503,7 @@ if opts.HandleJitterRemoval
                 segments(r).t_begin = temp(k).time_stamps(range(1));
                 segments(r).t_end = temp(k).time_stamps(range(2));
                 segments(r).duration = segments(r).t_end - segments(r).t_begin;
-                segments(r).effective_srate = (segments(r).num_samples-1)/ segments(r).duration;
+                segments(r).effective_srate = segments(r).num_samples / segments(r).duration;
             end
             
             % calculate the weighted mean sampling rate over all segments
