@@ -156,7 +156,7 @@ function [streams,fileheader] = load_xdf(filename,varargin)
 %                                ASTI, TUDelft, 21-08-2010
 %
 %                                version 1.12
--LIBVERSION = '1.12';
+LIBVERSION = '1.12';
 % check inputs
 opts = cell2struct(varargin(2:2:end),varargin(1:2:end),2);
 if ~isfield(opts,'OnChunk')
@@ -192,24 +192,6 @@ if ~isfield(opts,'FrameRateAccuracy')
 if ~exist(filename,'file')
     error(['The file "' filename '" does not exist.']); end
 
-if opts.Verbose
- -    disp(['NOTE: apparently you are missing a compiled binary version of the inner loop code.',...
--        ' Attempting to download...']);
--
--    fname = ['load_xdf_innerloop.' mexext];
--    mex_url = ['https://github.com/sccn/xdf/releases/download/v',...
--        LIBVERSION, '/', fname];
--    [this_path, this_name, this_ext] = fileparts(mfilename('fullpath'));
--    try
--        have_mex = true;
--        websave(fullfile(this_path, fname), mex_url);
--    catch ME
--        disp(['Unable to download the compiled binary version for your platform.',...
--        ' Using the slow MATLAB code instead.']);
--        have_mex = false;
--        %rethrow(ME);
--    end
--end
 
 % uncompress if necessary (note: "bonus" feature, not part of the XDF 1.0 spec)
 [p,n,x] = fileparts(filename);
@@ -238,7 +220,27 @@ closer = onCleanup(@()close_file(f,filename));  % object that closes the file wh
 % not necessarily available for every platform
 have_mex = exist('load_xdf_innerloop','file');
 if ~have_mex
-    disp('NOTE: apparently you are missing a compiled binary version of the inner loop code. Using the slow MATLAB code instead.'); end
+    if opts.Verbose
+        disp(['NOTE: apparently you are missing a compiled binary version of the inner loop code.',...
+            ' Attempting to download...']);
+    end
+    
+    fname = ['load_xdf_innerloop.' mexext];
+    mex_url = ['https://github.com/sccn/xdf/releases/download/v',...
+        LIBVERSION, '/', fname];
+    [this_path, this_name, this_ext] = fileparts(mfilename('fullpath'));
+    try
+        have_mex = true;
+        websave(fullfile(this_path, fname), mex_url);
+    catch ME
+        if opts.Verbose
+            disp(['Unable to download the compiled binary version for your platform.',...
+                ' Using the slow MATLAB code instead.']);
+        end
+        have_mex = false;
+        %rethrow(ME);
+    end
+end
 
 
 % ======================
@@ -250,6 +252,8 @@ if ~strcmp(fread(f,4,'*char')','XDF:')
     error(['This is not a valid XDF file (' filename ').']); end
 
 % for each chunk...
+
+if opts.Verbose; fprintf('Now reading from %s ...', filename); end;
 while 1
     % read [NumLengthBytes], [Length]
     len = double(read_varlen_int(f));
