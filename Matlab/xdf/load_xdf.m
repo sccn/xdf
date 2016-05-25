@@ -7,7 +7,7 @@ function [streams,fileheader] = load_xdf(filename,varargin)
 % information covered by the XDF 1.0 specification is imported, plus any additional meta-data
 % associated with streams or with the container file itself.
 %
-% See http://code.google.com/p/xdf/ for more information on XDF.
+% See https://github.com/sccn/xdf/ for more information on XDF.
 %
 % The function supports several further features, such as compressed XDF archives, robust
 % time synchronization, support for breaks in the data, as well as some other defects.
@@ -156,7 +156,7 @@ function [streams,fileheader] = load_xdf(filename,varargin)
 %                                ASTI, TUDelft, 21-08-2010
 %
 %                                version 1.12
-
+-LIBVERSION = '1.12';
 % check inputs
 opts = cell2struct(varargin(2:2:end),varargin(1:2:end),2);
 if ~isfield(opts,'OnChunk')
@@ -193,7 +193,23 @@ if ~exist(filename,'file')
     error(['The file "' filename '" does not exist.']); end
 
 if opts.Verbose
-    disp(['Importing XDF file ' filename '...']); end
+ -    disp(['NOTE: apparently you are missing a compiled binary version of the inner loop code.',...
+-        ' Attempting to download...']);
+-
+-    fname = ['load_xdf_innerloop.' mexext];
+-    mex_url = ['https://github.com/sccn/xdf/releases/download/v',...
+-        LIBVERSION, '/', fname];
+-    [this_path, this_name, this_ext] = fileparts(mfilename('fullpath'));
+-    try
+-        have_mex = true;
+-        websave(fullfile(this_path, fname), mex_url);
+-    catch ME
+-        disp(['Unable to download the compiled binary version for your platform.',...
+-        ' Using the slow MATLAB code instead.']);
+-        have_mex = false;
+-        %rethrow(ME);
+-    end
+-end
 
 % uncompress if necessary (note: "bonus" feature, not part of the XDF 1.0 spec)
 [p,n,x] = fileparts(filename);
