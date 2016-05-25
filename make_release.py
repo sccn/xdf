@@ -42,14 +42,14 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv,"u:p:",["username=","password="])
     except getopt.GetoptError:
-        print 'make_release.py -u <ghusername> -p <ghpassword>'
+        print('make_release.py -u <ghusername> -p <ghpassword>')
         sys.exit(2)
     if len(opts) < 2:
-        print 'make_release.py -u <ghusername> -p <ghpassword>'
+        print('make_release.py -u <ghusername> -p <ghpassword>')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print 'make_release.py -u <ghusername> -p <ghpassword>'
+            print('make_release.py -u <ghusername> -p <ghpassword>')
             sys.exit()
         elif opt in ("-u", "--username"):
             username = arg
@@ -79,7 +79,7 @@ def main(argv):
         try:
             release = repo.create_release('v'+mfile_version, target_commitish='master')
         except GitHubError:
-            print 'Release for version ' + mfile_version + ' already exists or validation failed.'
+            print('Release for version ' + mfile_version + ' already exists or validation failed.')
             return None
         
         #zip contents of Matlab\* into xdfimport<version#>.zip
@@ -95,17 +95,17 @@ def main(argv):
         
         #http://github3py.readthedocs.org/en/latest/repos.html#github3.repos.release.Release.upload_asset
         #Upload zip files as release assets
-        with open(eeglabfn) as fd:
+        with open(eeglabfn, 'rb') as fd:
             content = fd.read()
             release.upload_asset('application/zip', eeglabfn, content)
-        with open('xdf.zip') as fd:
+        with open('xdf.zip', 'rb') as fd:
             content = fd.read()
             release.upload_asset('application/zip', 'xdf.zip', content)
         #Upload mex files as release assets
         for fn in os.listdir('Matlab/xdf/'):
             fname, fext = os.path.splitext(fn)
             if len(fext) > 3 and fext[:4] == '.mex':
-                with open(os.path.join('Matlab', 'xdf', fn)) as fd:
+                with open(os.path.join('Matlab', 'xdf', fn), 'rb') as fd:
                     content = fd.read()
                 release.upload_asset('application/octet-stream', fn, content)
 
