@@ -155,8 +155,11 @@ function [streams,fileheader] = load_xdf(filename,varargin)
 %                                Contains portions of xml2struct Copyright (c) 2010, Wouter Falkena,
 %                                ASTI, TUDelft, 21-08-2010
 %
-%                                version 1.12
-LIBVERSION = '1.12';
+%                                Contains frame snapping routine to handle dropped video frames by 
+%                                Matthew Grivich.
+%
+%                                version 1.13
+LIBVERSION = '1.13';
 % check inputs
 opts = cell2struct(varargin(2:2:end),varargin(1:2:end),2);
 if ~isfield(opts,'OnChunk')
