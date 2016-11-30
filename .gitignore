@@ -1,3 +1,4 @@
 *.mex*
 xdfimport*.zip
 xdf.zip
+*.pyc
