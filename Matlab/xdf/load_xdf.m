@@ -533,7 +533,7 @@ if opts.HandleJitterRemoval
                     segments(r).t_begin = temp(k).time_stamps(range(1));
                     segments(r).t_end = temp(k).time_stamps(range(2));
                     segments(r).duration = segments(r).t_end - segments(r).t_begin;
-                    segments(r).effective_srate = segments(r).num_samples / segments(r).duration;
+                    segments(r).effective_srate = (segments(r).num_samples - 1) / segments(r).duration;
                 end
 
                 % calculate the weighted mean sampling rate over all segments
@@ -548,7 +548,7 @@ if opts.HandleJitterRemoval
 else
     % calculate effective sampling rate
     for k=1:length(temp)
-        temp(k).effective_srate = length(temp(k).time_stamps) / (temp(k).time_stamps(end) - temp(k).time_stamps(1)); end
+        temp(k).effective_srate = (length(temp(k).time_stamps) - 1) / (temp(k).time_stamps(end) - temp(k).time_stamps(1)); end
 end
 
 % copy the information into the output
