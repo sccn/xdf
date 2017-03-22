@@ -39,6 +39,17 @@ function [streams,fileheader] = load_xdf(filename,varargin)
 %                            are 1) the (optionally modified) data, 2) the (optionally modified)
 %                            time stamps, and 3) the (optionally modified) header (default: []).
 %
+%                'DisableVendorSpecifics' : Whether to perform certain vendor or system specific
+%                                           operations. One example is the "BrainVision RDA" data
+%                                           where it is necessary to pass the time stamps of a newly
+%                                           introduced marker identifier channel on to the actual markers
+%                                           in order to keep them perfectly in sync with the EEG data.
+%                                           'DisableVendorSpecifics' takes the base names of certain
+%                                           streams derived from the same source as a cell array of
+%                                           strings (e.g. 'BrainVision RDA'). It is also possible to
+%                                           disable vendor specifics altogether by providing the
+%                                           value 'all'.
+%
 %                Parameters for advanced failure recovery in clock synchronization:
 %
 %                'HandleClockResets' : Whether the importer should check for potential resets of the
@@ -188,6 +199,8 @@ if ~isfield(opts,'WinsorThreshold')
     opts.WinsorThreshold = 0.0001; end
 if ~isfield(opts,'ClockResetMaxJitter')
     opts.ClockResetMaxJitter = 5; end
+if ~isfield(opts,'DisableVendorSpecifics')
+    opts.DisableVendorSpecifics = {}; end
 if ~isfield(opts,'CorrectStreamLags')
     opts.CorrectStreamLags = true; end
 if ~isfield(opts,'FrameRateAccuracy')
@@ -563,6 +576,48 @@ for k=1:length(temp)
     end
     streams{k}.time_series = temp(k).time_series;
     streams{k}.time_stamps = temp(k).time_stamps - offset_mean;
+end
+
+
+% =========================================
+% === peform vendor specific operations ===
+% =========================================
+
+if ~any(strcmp('all',opts.DisableVendorSpecifics))
+
+    % BrainVision RDA
+    targetName = 'BrainVision RDA';
+    if ~any(strcmp(opts.DisableVendorSpecifics,targetName))
+
+        % find a target EEG stream...
+        for k=1:length(streams)
+
+            if strcmp(streams{k}.info.name,targetName) % Is a BrainVision RDA stream?
+                mkChan = [];
+                for iChan = 1:length( streams{ k }.info.desc.channels.channel ) % Find marker index channel (any channel, not necessary last)
+                    if strcmp( streams{ k }.info.desc.channels.channel{ iChan }.label, 'MkIdx' ) && strcmp( streams{ k }.info.desc.channels.channel{ iChan }.type, 'Marker' ) && strcmp( streams{ k }.info.desc.channels.channel{ iChan }.unit, 'Counts (decimal)' )
+                        mkChan = iChan;
+                        break % Only one marker channel expected
+                    end
+                end
+                if ~isempty( mkChan ) % Has a marker index channel?
+                    for m = 1:length( streams ) % find a corresponding indexed marker stream...
+                        if strcmp( streams{ m }.info.name, [ targetName ' Markers' ] ) && strcmp( streams{ m }.info.hostname, streams{ k }.info.hostname ) && strncmp( streams{ m }.info.source_id, streams{ k }.info.source_id, length( streams{ k }.info.source_id ) )
+                            if opts.Verbose
+                                disp( [ '  performing ', targetName, ' specific tasks for stream ', num2str( k ), '...' ] );
+                            end
+                            streams = ProcessBVRDAindexedMarkers( streams, k, m, mkChan );
+                        end
+                    end
+                end
+                streams{ k }.time_series( mkChan, : ) = []; % Remove marker index channel
+                streams{ k }.info.desc.channels.channel( mkChan ) = [];
+            end
+
+        end
+
+    end
+    
 end
 
 
@@ -954,3 +1009,49 @@ function frameTimesModeled = droppedFramesCorrection(frameTimes, nominalFrameRat
 
 end
 
+
+function streams = ProcessBVRDAindexedMarkers( streams, dataStream, mkStream, mkChan )
+
+clearMarkers = [];
+
+for iMrk = 1:length( streams{ mkStream }.time_series )
+
+    % Decode marker
+    MrkInfo = regexp( streams{ mkStream }.time_series{ iMrk }, 'mk(?<idx>\d+)=(?<str>.*)', 'names' );
+
+    if ~isempty( MrkInfo.idx )
+
+        % Find corresponding sample in marker index channel
+        lat = find( streams{ dataStream }.time_series( mkChan, : ) == str2double( MrkInfo.idx ) );
+        offset = streams{ mkStream }.time_stamps( iMrk ) - streams{ dataStream }.time_stamps( lat );
+
+        % Is the index unique (overflow)?
+        if length( lat ) > 1
+            [ minOffset, minOffsetIdx ] = min( abs( offset ) ); %#ok<ASGLU>
+            lat = lat( minOffsetIdx );
+            offset = offset( minOffsetIdx );
+        end
+
+        % Sanity check
+        if offset > 10
+            warning( 'Time stamp difference between indexed marker %s (%.3f s) and corresponding sample in marker channel (%.3f s) exceeding threshold.\n', MrkInfo.idx, streams{ mkStream }.time_stamps( iMrk ), streams{ dataStream }.time_stamps( lat ) )
+        end
+
+        % Copy time stamp and rewrite marker
+        if ~isempty( lat )
+            streams{ mkStream }.time_stamps( iMrk ) = streams{ dataStream }.time_stamps( lat );
+            streams{ mkStream }.time_series{ iMrk } = MrkInfo.str;
+        else
+            warning( 'No corresponding sample found in marker channel for indexed marker %s. Removing...', MrkInfo.idx )
+            clearMarkers = [ clearMarkers iMrk ]; %#ok<AGROW>
+        end
+
+    end
+
+end
+
+% Remove markers without corresponding marker channel sample
+streams{ mkStream }.time_stamps( clearMarkers ) = [];
+streams{ mkStream }.time_series( clearMarkers ) = [];
+
+end
