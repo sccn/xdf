@@ -610,8 +610,7 @@ if ~any(strcmp('all',opts.DisableVendorSpecifics))
                         end
                     end
                 end
-                streams{ k }.time_series( mkChan, : ) = []; % Remove marker index channel
-                streams{ k }.info.desc.channels.channel( mkChan ) = [];
+
             end
 
         end
@@ -1053,5 +1052,12 @@ end
 % Remove markers without corresponding marker channel sample
 streams{ mkStream }.time_stamps( clearMarkers ) = [];
 streams{ mkStream }.time_series( clearMarkers ) = [];
+
+% Remove marker index channel
+streams{ dataStream }.time_series( mkChan, : ) = []; 
+streams{ dataStream }.info.desc.channels.channel( mkChan ) = [];
+
+% Decrement channal count by 1
+streams{ dataStream }.info.channel_count = num2str( str2num( streams{ dataStream }.info.channel_count ) - 1 );
 
 end
