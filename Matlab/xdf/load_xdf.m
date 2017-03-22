@@ -609,8 +609,16 @@ if ~any(strcmp('all',opts.DisableVendorSpecifics))
                             streams = ProcessBVRDAindexedMarkers( streams, k, m, mkChan );
                         end
                     end
+					
+					% Remove marker index channel
+					streams{ k }.time_series( mkChan, : ) = []; 
+					streams{ k }.info.desc.channels.channel( mkChan ) = [];
+					
+					% Decrement channel count by 1
+					streams{ k }.info.channel_count = num2str( str2num( streams{ k }.info.channel_count ) - 1 );
+					
                 end
-
+				
             end
 
         end
@@ -1053,11 +1061,5 @@ end
 streams{ mkStream }.time_stamps( clearMarkers ) = [];
 streams{ mkStream }.time_series( clearMarkers ) = [];
 
-% Remove marker index channel
-streams{ dataStream }.time_series( mkChan, : ) = []; 
-streams{ dataStream }.info.desc.channels.channel( mkChan ) = [];
-
-% Decrement channal count by 1
-streams{ dataStream }.info.channel_count = num2str( str2num( streams{ dataStream }.info.channel_count ) - 1 );
 
 end
