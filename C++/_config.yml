@@ -1,0 +1,3 @@
+theme: jekyll-theme-cayman
+description: [libxdf is a static C++ library for loading XDF files]
+show_downloads: ["true"]

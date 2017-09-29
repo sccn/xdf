@@ -1,0 +1,8 @@
+xdf.pro.user
+CMakeCache.txt
+CMakeFiles
+Makefile
+cmake_install.cmake
+CMakeLists.txt.user
+*.a
+*.dylib
