@@ -552,10 +552,10 @@ if opts.HandleJitterRemoval
                 end
 
                 % calculate the weighted mean sampling rate over all segments
-                temp(k).effective_rate = sum(bsxfun(@times,[segments.effective_srate],[segments.num_samples]/sum([segments.num_samples])));            
+                temp(k).effective_srate = sum(bsxfun(@times,[segments.effective_srate],[segments.num_samples]/sum([segments.num_samples])));
 
                 % transfer the information into the output structs
-                streams{k}.info.effective_srate = temp(k).effective_rate;
+                streams{k}.info.effective_srate = temp(k).effective_srate;
                 streams{k}.segments = segments;
             end
         end
@@ -563,7 +563,14 @@ if opts.HandleJitterRemoval
 else
     % calculate effective sampling rate
     for k=1:length(temp)
-        temp(k).effective_srate = (length(temp(k).time_stamps) - 1) / (temp(k).time_stamps(end) - temp(k).time_stamps(1)); end
+        if length(temp(k).time_stamps) > 0
+            temp(k).effective_srate = (length(temp(k).time_stamps) - 1) / (temp(k).time_stamps(end) - temp(k).time_stamps(1));
+        else
+            temp(k).effective_srate = 0;
+        end
+        % transfer the information into the output structs
+        streams{k}.info.effective_srate = temp(k).effective_srate;
+    end
 end
 
 % copy the information into the output
