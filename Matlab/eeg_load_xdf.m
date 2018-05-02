@@ -84,9 +84,9 @@ try
         if isfield(chn,'type')
             chanlocs(c).type = chn.type; end
         try
-            chanlocs(c).X = str2num(chn.location.X)/1000;
-            chanlocs(c).Y = str2num(chn.location.Y)/1000;
-            chanlocs(c).Z = str2num(chn.location.Z)/1000;
+            chanlocs(c).X = str2double(chn.location.X)/1000;
+            chanlocs(c).Y = str2double(chn.location.Y)/1000;
+            chanlocs(c).Z = str2double(chn.location.Z)/1000;
             [chanlocs(c).sph_theta,chanlocs(c).sph_phi,chanlocs(c).sph_radius] = cart2sph(chanlocs(c).X,chanlocs(c).Y,chanlocs(c).Z);
             [chanlocs(c).theta,chanlocs(c).radius] = cart2pol(chanlocs(c).X,chanlocs(c).Y);
         catch
@@ -120,7 +120,7 @@ for s=1:length(streams)
                 end
                 [~, s_events(e).latency] = min(abs(stream.time_stamps - streams{s}.time_stamps(e)));
             end
-            event = [event, s_events];
+            event = [event, s_events]; %#ok<AGROW>
         catch err
             disp(['Could not interpret event stream named "' streams{s}.info.name '": ' err.message]);
         end
