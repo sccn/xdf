@@ -108,27 +108,19 @@ end
 
 % events...
 event = [];
-if isfinite(stream.info.effective_srate) && stream.info.effective_srate>0
-    srate = stream.info.effective_srate;
-else
-    srate = raw.srate;
-end
 for s=1:length(streams)
     if (strcmp(streams{s}.info.type,'Markers') || strcmp(streams{s}.info.type,'Events')) && ~ismember(streams{s}.info.name,args.exclude_markerstreams)
         try
-            if iscell(streams{s}.time_series)
-                for e=1:length(streams{s}.time_stamps)
-                    event(end+1).type = streams{s}.time_series{e};
-                    event(end).latency = 1+srate*(streams{s}.time_stamps(e)-stream.time_stamps(1));
-                    event(end).duration = 1;
+            s_events = struct('type', '', 'latency', [], 'duration', num2cell(ones(1, length(streams{s}.time_stamps))));
+            for e=1:length(streams{s}.time_stamps)
+                if iscell(streams{s}.time_series)
+                    s_events(e).type = streams{s}.time_series{e};
+                else
+                    s_events(e).type = num2str(streams{s}.time_series(e));
                 end
-            else
-                for e=1:length(streams{s}.time_stamps)
-                    event(end+1).type = num2str(streams{s}.time_series(e));
-                    event(end).latency = 1+srate*(streams{s}.time_stamps(e)-stream.time_stamps(1));
-                    event(end).duration = 1;
-                end
+                [~, s_events(e).latency] = min(abs(stream.time_stamps - streams{s}.time_stamps(e)));
             end
+            event = [event, s_events];
         catch err
             disp(['Could not interpret event stream named "' streams{s}.info.name '": ' err.message]);
         end
@@ -140,9 +132,6 @@ raw.event = event;
 % etc...
 raw.etc.desc = stream.info.desc;
 raw.etc.info = rmfield(stream.info,'desc');
-
-
-
 
 
 function res = hlp_varargin2struct(args, varargin)
