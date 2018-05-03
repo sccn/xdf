@@ -31,10 +31,10 @@ def load_xdf(filename,
              winsor_threshold=0.0001):
     """Import an XDF file.
 
-    This is an importer for multi-stream XDF (Extensible Data Format) 
-    recordings. All information covered by the XDF 1.0 specification is 
-    imported, plus any additional meta-data associated with streams or with 
-    the container file itself. 
+    This is an importer for multi-stream XDF (Extensible Data Format)
+    recordings. All information covered by the XDF 1.0 specification is
+    imported, plus any additional meta-data associated with streams or with
+    the container file itself.
 
     See http://code.google.com/p/xdf/ for more information on XDF.
 
@@ -42,9 +42,9 @@ def load_xdf(filename,
     synchronization, support for breaks in the data, as well as some other
     defects.
 
-    Args: 
+    Args:
         filename : name of the file to import (*.xdf or *.xdfz)
-        
+
         verbose : Whether to print verbose diagnostics. (default: false)
 
         synchronize_clocks : Whether to enable clock synchronization based on
@@ -217,7 +217,7 @@ def load_xdf(filename,
         # read [MagicCode]
         if f.read(4) != b'XDF:':
             raise Exception('not a valid XDF file: %s' % filename)
-        
+
         # for each chunk...
         while True:
 
@@ -327,7 +327,7 @@ def load_xdf(filename,
             else:
                 # skip other chunk types (Boundary, ...)
                 f.read(chunklen-2)
-    
+
     # Concatenate the signal across chunks
     for stream in temp.values():
         if stream.time_stamps:
@@ -355,7 +355,7 @@ def load_xdf(filename,
                            clock_reset_threshold_offset_stds,
                            clock_reset_threshold_offset_seconds,
                            winsor_threshold)
-    
+
     # perform jitter removal if requested
     if dejitter_timestamps:
         if verbose:
@@ -537,7 +537,7 @@ def _jitter_removal(streams,
                     e = np.ones((len(indices),))
                     X = np.reshape(np.hstack((e, indices)), (2, -1)).T
                     y = stream.time_stamps[indices]
-                    mapping = np.linalg.lstsq(X, y)[0]
+                    mapping = np.linalg.lstsq(X, y, rcond=None)[0]
                     stream.time_stamps = mapping[0] + mapping[1]*indices
                     effective_srate = np.array(effective_srate)
                     num_samples = np.array(num_samples)
