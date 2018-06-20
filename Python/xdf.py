@@ -3,7 +3,7 @@
 This function is closely following the load_xdf reference implementation.
 
 """
-
+import gzip
 import os
 import struct
 import itertools
@@ -212,7 +212,7 @@ def load_xdf(filename,
     filesize = os.path.getsize(filename)
 
     # read file contents ([SomeText] below refers to items in the XDF Spec)
-    with open(filename, 'rb') as f:
+    with gzip.GzipFile(filename, 'rb') if filename.endswith('.xdfz') else open(filename, 'rb') as f:
 
         # read [MagicCode]
         if f.read(4) != b'XDF:':
