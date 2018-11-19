@@ -2,7 +2,7 @@
 
 This function is closely following the load_xdf reference implementation.
 
-Copyright (C) 2014-2017 Syntrogi Inc. All rights reserved.
+Copyright (c) 2015-2018, Syntrogi Inc. dba Intheon
 """
 
 import os
