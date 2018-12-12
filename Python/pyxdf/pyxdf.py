@@ -139,8 +139,7 @@ def load_xdf(filename,
     License:
         This file is covered by the BSD license.
 
-        Copyright (c) 2015, Alejandro Ojeda and Christian Kothe
-        All rights reserved.
+        Copyright (c) 2015-2018, Syntrogi Inc. dba Intheon
 
         Redistribution and use in source and binary forms, with or without
         modification, are permitted provided that the following conditions are
