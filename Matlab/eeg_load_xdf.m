@@ -13,7 +13,10 @@ function raw = eeg_load_xdf(filename, varargin)
 %                                (default: 'EEG')
 %
 %                'effective_rate' : if true, use the effective sampling rate instead of the nominal
-%                                   sampling rate (as declared by the device) (default: false)
+%                                   sampling rate (as declared by the device). Note that using
+%                                   effective_rate can lead to incorrect results if the nominal
+%                                   sampling rate is 0 (i.e. non constant sample interval)
+%                                   (default: false)
 %
 %                'exclude_markerstreams' : can be a cell array of stream names to exclude from
 %                                          use as marker streams (default: {})
