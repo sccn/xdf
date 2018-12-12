@@ -1,6 +1,6 @@
 """Python setup script for the pylsl distribution package."""
 
-from setuptools import setup, find_packages, Distribution
+from setuptools import setup, find_packages
 from codecs import open
 from os import path
 
@@ -64,13 +64,13 @@ setup(
 
     # You can just specify the packages manually here if your project is
     # simple. Or you can use find_packages().
-    packages=find_packages(),
+    packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
 
     # List run-time dependencies here.  These will be installed by pip when
     # your project is installed. For an analysis of "install_requires" vs pip's
     # requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=[],
+    install_requires=['numpy'],
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). You can install these using the following syntax,
@@ -95,11 +95,5 @@ setup(
     # To provide executable scripts, use entry points in preference to the
     # "scripts" keyword. Entry points provide cross-platform support and allow
     # pip to create the appropriate form of executable for the target platform.
-    entry_points={},
-
-    # We want to eventually move to having platform-specific distributions
-    # with only the required platform shared objects. Unfortunately, for Linux,
-    # pypi only accepts anylinux builds. Leave the following commented until
-    # anylinux is working with AppVeyor/Travis. This will create the wheel for
-    # 'any' Python. That means we need all available shared objects when we upload.
+    entry_points={}
 )
