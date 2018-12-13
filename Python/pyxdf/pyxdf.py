@@ -14,6 +14,7 @@ from collections import OrderedDict, defaultdict
 import logging
 from scipy.interpolate import interp1d
 import numpy as np
+from collections import deque
 
 __all__ = ['load_xdf']
 __version__ = '1.14.0'
@@ -383,7 +384,7 @@ def load_xdf(filename,
         stream['info']['effective_srate'] = tmp.effective_srate
         stream['time_series'] = tmp.time_series
         stream['time_stamps'] = tmp.time_stamps
-    
+        
     # sync sampling with the fastest timeseries by interpolation / shifting
     if sync_timestamps:
         if type(sync_timestamps) is not str: 
@@ -572,10 +573,9 @@ def _jitter_removal(streams,
 
 
 def _sync_timestamps(streams, kind='linear'):    
-    srate_key = 'effective_srate'    
     
-    snames = [stream['info']['source_id'] for stream in streams.values()]
-    stamps = [stream['time_stamps'] for stream in streams.values()]    
+    # selecting the stream with the highest effective sampling rate
+    srate_key = 'effective_srate'        
     srates = [stream['info'][srate_key] for stream in streams.values()]
     max_fs = max(srates, default=0) 
     
@@ -586,22 +586,35 @@ def _sync_timestamps(streams, kind='linear'):
         # but anyways: better safe than sorry
         logger.warning('I found at least two streams with identical effective '
                        'srate. I select one at random for syncing timestamps.')
-        
-    fastest_stream = snames[srates.index(max_fs)]
-    new_timestamps = stamps[srates.index(max_fs)]
-        
+            
+    # selecting maximal time range of the whole recording 
+    # streams with fs=0 might are not dejittered be default, and therefore
+    # indexing first and last might miss the earliest/latest
+    # we therefore take the min and max timestamp 
+    stamps = [stream['time_stamps'] for stream in streams.values()]    
+    ts_first = min((min(s) for s in stamps))
+    ts_last = max((max(s) for s in stamps))
+    
+    # generate new timestamps 
+    # based on extrapolation of the fastest timestamps towards the maximal
+    # time range of the whole recording
+    new_timestamps = deque(stamps[srates.index(max_fs)])
+    fs_step = 1.0/max_fs
+    while new_timestamps[0] > ts_first:
+        new_timestamps.appendleft(new_timestamps[0]-fs_step)
+    while new_timestamps[-1] < ts_last:
+        new_timestamps.append(new_timestamps[-1]+fs_step)
+
+    # interpolate or shift all streams to the new timestamps
     for stream in streams.values():
         channel_format = stream['info']['channel_format'][0]
         
-        if stream['info']['source_id'] == fastest_stream:
-            # no need to interpolate the fastest stream
-            continue
         if ( (channel_format == 'string') and 
             (stream['info'][srate_key]== 0) ):
             # you can't really interpolate strings; and streams with srate=0 
             # don't have a real sampling rate. One approach to sync them is to 
-            # shift their events to the nearest timestamp of the fastest 
-            # timeseries
+            # shift their events to the nearest timestamp of the new 
+            # timestamps
             shifted_x = []
             for x in stream['time_stamps']:
                 argmin = (abs(new_timestamps-x)).argmin()
