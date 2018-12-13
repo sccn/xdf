@@ -28,6 +28,7 @@ def load_xdf(filename,
              handle_clock_resets=True,
              dejitter_timestamps=True,
              sync_timestamps=False,
+             overlap_timestamps=False,
              jitter_break_threshold_seconds=1,
              jitter_break_threshold_samples=500,
              clock_reset_threshold_seconds=5,
@@ -65,8 +66,16 @@ def load_xdf(filename,
             True -> linear syncing
             str:<'linear’, ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, 
             ‘previous’, ‘next’> for method inherited from  
-            scipy.interpolate.interp1d  
-
+            scipy.interpolate.interp1d          
+        
+        overlap_timestamps: bool
+            If true, return only overlapping streams, i.e. all streams
+            are limited to periods where all streams have data. (default: True)            
+            If false, depends on whether sync_timestamps is set. If set, it 
+            expands all streams to include the earliest and latest timestamp of 
+            any stream, if not set it simply return streams independently.
+            
+            
         on_chunk : Function that is called for each chunk of data as it is
            being retrieved from the file; the function is allowed to modify
            the data (for example, sub-sample it). The four input arguments
@@ -358,7 +367,8 @@ def load_xdf(filename,
             else:
                 stream.time_series = np.zeros((stream.nchns, 0))
 
-    # perform (fault-tolerant) clock synchronization if requested
+
+   # perform (fault-tolerant) clock synchronization if requested
     if synchronize_clocks:
         logger.info('  performing clock synchronization...')
         temp = _clock_sync(temp, handle_clock_resets,
@@ -385,6 +395,8 @@ def load_xdf(filename,
         stream['time_series'] = tmp.time_series
         stream['time_stamps'] = tmp.time_stamps
         
+
+    return streams, fileheader    
     # sync sampling with the fastest timeseries by interpolation / shifting
     if sync_timestamps:
         if type(sync_timestamps) is not str: 
@@ -392,6 +404,12 @@ def load_xdf(filename,
             logger.warning('sync_timestamps defaults to "linear"')
         streams = _sync_timestamps(streams, kind=sync_timestamps)
         
+  
+  # limit streams to their overlapping periods
+    if overlap_timestamps:
+        streams = _limit_streams_to_overlap(streams)
+        
+    
     streams = [s for s in streams.values()]
     sort_data = [s['info']['name'][0] for s in streams]
     streams = [x for _, x in sorted(zip(sort_data, streams))]
@@ -604,7 +622,8 @@ def _sync_timestamps(streams, kind='linear'):
         new_timestamps.appendleft(new_timestamps[0]-fs_step)
     while new_timestamps[-1] < ts_last:
         new_timestamps.append(new_timestamps[-1]+fs_step)
-
+    
+    new_timestamps = np.asanyarray(new_timestamps)
     # interpolate or shift all streams to the new timestamps
     for stream in streams.values():
         channel_format = stream['info']['channel_format'][0]
@@ -649,6 +668,35 @@ def _sync_timestamps(streams, kind='linear'):
             raise NotImplementedError("Don't know how to sync sampling for " + 
                                       'channel_format={}'.format(
                                               channel_format))
+    return streams
+
+
+def _limit_streams_to_overlap(streams):   
+    
+    ts_first, ts_last = [], []
+    for stream in streams.values():                
+        # skip streams with fs=0, because they might just not have
+        # send anything on purpose (e.g. markers) - while data is already 
+        # being recorded. wouldNät make sense to throw that away
+        if stream['info']['effective_srate'] !=0:            
+            # extrapolation in _sync_timestamps is done with NaNs
+            not_extrapolated = np.where(~np.isnan(stream['time_series']))[0]
+            ts_first.append(min(stream['time_stamps'][not_extrapolated]))
+            ts_last.append(max(stream['time_stamps'][not_extrapolated]))
+            
+    ts_first = max(ts_first)
+    ts_last = min(ts_last)
+    
+    for stream in streams.values():
+        a = np.where(stream['time_stamps']>=ts_first)[0]
+        b = np.where(stream['time_stamps']<=ts_last)[0]
+        select = np.intersect1d(a,b)               
+        stream['time_stamps'] = stream['time_stamps'][select]     
+        if type(stream['time_series']) is list:
+            stream['time_series'] = [stream['time_series'][s] for s in select]
+        else:
+            stream['time_series'] = stream['time_series'][select]     
+    
     return streams
 
 # noinspection PyTypeChecker
