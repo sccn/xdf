@@ -14,7 +14,6 @@ from collections import OrderedDict, defaultdict
 import logging
 from scipy.interpolate import interp1d
 import numpy as np
-from collections import deque
 
 __all__ = ['load_xdf']
 __version__ = '1.14.0'
@@ -396,7 +395,6 @@ def load_xdf(filename,
         stream['time_stamps'] = tmp.time_stamps
         
 
-    return streams, fileheader    
     # sync sampling with the fastest timeseries by interpolation / shifting
     if sync_timestamps:
         if type(sync_timestamps) is not str: 
@@ -616,14 +614,18 @@ def _sync_timestamps(streams, kind='linear'):
     # generate new timestamps 
     # based on extrapolation of the fastest timestamps towards the maximal
     # time range of the whole recording
-    new_timestamps = deque(stamps[srates.index(max_fs)])
     fs_step = 1.0/max_fs
-    while new_timestamps[0] > ts_first:
-        new_timestamps.appendleft(new_timestamps[0]-fs_step)
-    while new_timestamps[-1] < ts_last:
-        new_timestamps.append(new_timestamps[-1]+fs_step)
+    new_timestamps = stamps[srates.index(max_fs)]
+    num_steps = int((new_timestamps[0]-ts_first)/fs_step) + 1
+    front_stamps = np.linspace(ts_first, new_timestamps[0], num_steps)
+    num_steps = int((ts_last-new_timestamps[-1])/fs_step) + 1
+    end_stamps = np.linspace(new_timestamps[-1], ts_last, num_steps)
+
+    new_timestamps = np.concatenate((front_stamps, 
+                                     new_timestamps[1:-1], 
+                                     end_stamps),
+                                    axis=0)
     
-    new_timestamps = np.asanyarray(new_timestamps)
     # interpolate or shift all streams to the new timestamps
     for stream in streams.values():
         channel_format = stream['info']['channel_format'][0]
@@ -644,7 +646,7 @@ def _sync_timestamps(streams, kind='linear'):
                 try:
                     idx = shifted_x.index(x)
                     y = stream['time_series'][idx]
-                    shifted_y.append(y)
+                    shifted_y.append([y])
                 except ValueError:
                     shifted_y.append([''])
                                 
