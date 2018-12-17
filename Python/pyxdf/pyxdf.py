@@ -688,12 +688,17 @@ def _limit_streams_to_overlap(streams):
             
     ts_first = max(ts_first)
     ts_last = min(ts_last)
-    
     for stream in streams.values():
-        a = np.where(stream['time_stamps']>=ts_first)[0]
-        b = np.where(stream['time_stamps']<=ts_last)[0]
+        # use np.around to prevent floating point hickups
+        around = np.around(stream['time_stamps'], 15)
+        a = np.where(around>=ts_first)[0]
+        b = np.where(around<=ts_last)[0]
         select = np.intersect1d(a,b)               
-        stream['time_stamps'] = stream['time_stamps'][select]     
+        if type(stream['time_stamps']) is list:
+            stream['time_stamps'] = [stream['time_stamps'][s] for s in select]
+        else:
+            stream['time_stamps'] = stream['time_stamps'][select]     
+        
         if type(stream['time_series']) is list:
             stream['time_series'] = [stream['time_series'][s] for s in select]
         else:
