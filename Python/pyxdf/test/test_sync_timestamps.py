@@ -30,6 +30,11 @@ def streams():
     streams[3] = MockStream([0.2, 1.1071, 1.2, 1.9, 2.5],
                             ['mark_' + str(n) for n in range(0,5,1)], 
                             0, ['string'])
+    # integer datatype stream, 
+    streams[4] = MockStream(np.linspace(0.1,1.1,251), 
+                            np.linspace(0, 250, 251, dtype='int32'), 
+                            250, ['int32'])
+
     return streams
 
 @pytest.fixture(scope='session')
@@ -70,9 +75,16 @@ def test_interpolation(synced):
     idx = np.where(~np.isnan(synced[2]['time_series']))[0]
     assert np.all(np.isclose(synced[2]['time_series'][idx], 
                              np.linspace(2, 1, 1001)))
-
+                             
+                             
 def test_identity_after_interpolation(synced, streams):
     'the data for stream 1 should be identical to original'
     idx = np.where(~np.isnan(synced[1]['time_series']))[0]
     assert np.all(np.isclose(synced[1]['time_series'][idx],
                              streams[1]['time_series']))
+                             
+def test_integer_interpolation(synced, streams):
+    'the data of stream 4 should be all integers'
+    u = np.unique(synced[4]['time_series'])
+    u = np.int64(np.compress(~np.isnan(u), u))
+    assert np.all(streams[4]['time_series'] == u)

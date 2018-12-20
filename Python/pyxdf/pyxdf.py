@@ -589,6 +589,9 @@ def _jitter_removal(streams,
 
 
 def _sync_timestamps(streams, kind='linear'):    
+    '''syncs all streams to the fastest sampling rate by shifting or 
+    upsampling 
+    '''
     
     # selecting the stream with the highest effective sampling rate
     srate_key = 'effective_srate'        
@@ -653,8 +656,10 @@ def _sync_timestamps(streams, kind='linear'):
             stream['time_series'] = np.asanyarray((shifted_y))
             stream['time_stamps'] = new_timestamps
 
-        elif channel_format == 'float32':
-            #a float32 can be interpolated with interp1d
+        elif channel_format in ['float32', 'double64', 'int8', 'int16',
+                                'int32', 'int64']:
+            # continuous interpolation is possible using interp1d
+            # discrete interpolation requires some finetuning
             # bounds_error=False replaces everything outside of interpolation 
             # zone with NaNs 
             y = stream['time_series']
@@ -666,6 +671,13 @@ def _sync_timestamps(streams, kind='linear'):
             stream['time_series'] = f(new_timestamps)
             stream['time_stamps'] = new_timestamps
             stream['info']['effective_srate'] = max_fs
+        
+            if channel_format in ['int8', 'int16', 'int32', 'int64']:
+                # i am stuck with float64s, as integers have no nans
+                # therefore i round to the nearest integer instead
+                stream['time_series'] = np.around(stream['time_series'], 0)
+                
+            
         else:
             raise NotImplementedError("Don't know how to sync sampling for " + 
                                       'channel_format={}'.format(
