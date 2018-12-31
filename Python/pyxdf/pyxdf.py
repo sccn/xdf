@@ -591,6 +591,22 @@ def _jitter_removal(streams,
 def _sync_timestamps(streams, kind='linear'):    
     '''syncs all streams to the fastest sampling rate by shifting or 
     upsampling 
+    
+    Depending on a streams channel-format, extrapolation is performed using 
+    with NaNs (numerical formats) or with [''] (string format). 
+    
+    Interpolation is only performed for numeric values, and depending on the 
+    kind argument which is inherited from scipy.interpolate.interp1d. Consider 
+    that If the channel format is an integer type (i.e. 'int8', 'int16', 
+    'int32', or 'int64'), integer output is enforced by rounding the values.
+    Additionally, consider that not all interpolation methods are convex, i.e.
+    for some kinds, you might receive values above or below the desired 
+    integer type. There is no correction implemented for this, as it is assumed
+    this is a desired behavior if you give the appropriate argument.
+    
+    For string formats, events are shifted towards the nearest feasible 
+    timepoint. Any time-stamps without a marker get then assigned an empty
+    marker, i.e. [''].    
     '''
     
     # selecting the stream with the highest effective sampling rate
@@ -687,7 +703,15 @@ def _sync_timestamps(streams, kind='linear'):
 
 
 def _limit_streams_to_overlap(streams):   
+    '''takes streams, returns streams limited to time periods overlapping 
+    between all streams
     
+    The overlapping periods start and end for each streams with the first and 
+    last sample completely within the overlapping period.
+    If time_stamps have been synced, these are the same time-points for all 
+    streams. Consider that in the case of unsynced time-stamps, the time-stamps 
+    can not be exactly equal!
+    '''
     ts_first, ts_last = [], []
     for stream in streams.values():                
         # skip streams with fs=0 or if they send strings, because they might 
