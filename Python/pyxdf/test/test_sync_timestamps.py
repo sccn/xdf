@@ -43,6 +43,11 @@ def synced(streams):
     return synced
 
 #%% test
+def test_samplingrate(synced):
+    'check that for all streams the sampling rate is identical to the fastest'
+    for s in synced.values():                
+        assert(s['info']['effective_srate']==1000)    
+
 def test_earliest(synced):
     'should expand to the earliest timestamp, which is 0.1 from stream 2'
     for stream in synced.values():
@@ -88,3 +93,4 @@ def test_integer_interpolation(synced, streams):
     u = np.unique(synced[4]['time_series'])
     u = np.int64(np.compress(~np.isnan(u), u))
     assert np.all(streams[4]['time_series'] == u)
+    

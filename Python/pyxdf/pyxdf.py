@@ -670,8 +670,7 @@ def _sync_timestamps(streams, kind='linear'):
             
             stream['time_series'] = f(new_timestamps)
             stream['time_stamps'] = new_timestamps
-            stream['info']['effective_srate'] = max_fs
-        
+
             if channel_format in ['int8', 'int16', 'int32', 'int64']:
                 # i am stuck with float64s, as integers have no nans
                 # therefore i round to the nearest integer instead
@@ -682,6 +681,8 @@ def _sync_timestamps(streams, kind='linear'):
             raise NotImplementedError("Don't know how to sync sampling for " + 
                                       'channel_format={}'.format(
                                               channel_format))
+        stream['info']['effective_srate'] = max_fs
+        
     return streams
 
 
@@ -689,10 +690,11 @@ def _limit_streams_to_overlap(streams):
     
     ts_first, ts_last = [], []
     for stream in streams.values():                
-        # skip streams with fs=0, because they might just not have
-        # send anything on purpose (e.g. markers) - while data is already 
-        # being recorded. wouldNät make sense to throw that away
-        if stream['info']['effective_srate'] !=0:            
+        # skip streams with fs=0 or if they send strings, because they might 
+        # just not yet have send anything on purpose (i.e. markers) 
+        # while other data was already  being recorded. 
+        if (stream['info']['effective_srate'] !=0 and 
+            stream['info']['channel_format'][0] != 'string'):            
             # extrapolation in _sync_timestamps is done with NaNs
             not_extrapolated = np.where(~np.isnan(stream['time_series']))[0]
             ts_first.append(min(stream['time_stamps'][not_extrapolated]))
