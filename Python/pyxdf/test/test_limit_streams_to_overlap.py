@@ -30,54 +30,24 @@ def streams():
     return streams
 
 # %% test
-    
-def test_earliest_marker_stamp():
-    'check validity of first element in marker stream'
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[3]['time_stamps'][0], 1.1071)
-    
-def test_latest_marker_stamp():
-    'check validity of first element in marker stream'
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[3]['time_stamps'][-1], 1.2)
 
-def test_earliest_marker_series():
+def test_timestamps():
+    'test whether the first and last timestamps have been selected as expected'
     olap = _limit_streams_to_overlap(streams())
-    assert olap[3]['time_series'][0] == 'mark_1'
+    for s,v in zip(olap.values(), 
+                   [(1, 1.4), (1, 1.4), (1.1071, 1.2)]):
+        assert np.isclose(s['time_stamps'][0], v[0])
+        assert np.isclose(s['time_stamps'][-1], v[-1])
     
-def test_latest_marker_series():
+def test_timeseries():
+    'test whether the first and last value are as expected'
     olap = _limit_streams_to_overlap(streams())
-    assert olap[3]['time_series'][-1] == 'mark_2' 
-    
-def test_earliest_fast_stamp():
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[1]['time_stamps'][0], 1.) 
-    
-def test_earliest_fast_series():
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[1]['time_stamps'][0], 1.) 
-    
-def test_latest_fast_stamp():
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[1]['time_stamps'][-1], 1.4) 
-    
-def test_latest_fast_series():
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[1]['time_stamps'][-1], 1.4) 
-    
-def test_earliest_slow_stamp():
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[1]['time_stamps'][0], 1.) 
-    
-def test_earliest_slow_series():
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[1]['time_stamps'][0], 1.) 
-    
-def test_latest_slow_stamp():
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[1]['time_stamps'][-1], 1.4) 
-    
-def test_latest_slow_series():
-    olap = _limit_streams_to_overlap(streams())
-    assert np.isclose(olap[1]['time_stamps'][-1], 1.4) 
+    for s,v in zip(olap.values(), 
+                   [(1, 1.4), (1, 1.4), ('mark_1', 'mark_2')]):
+        if s['info']['channel_format'] != ['string']:
+            assert np.isclose(s['time_series'][0], v[0])
+            assert np.isclose(s['time_series'][-1], v[-1])
+        else:
+            assert s['time_series'][0] == v[0]
+            assert s['time_series'][-1] == v[-1]
     
