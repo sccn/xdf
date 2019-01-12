@@ -587,7 +587,20 @@ def _jitter_removal(streams,
             stream.effective_srate = 0
     return streams
 
-
+def _interpolate(x:np.ndarray, y:np.ndarray, new_x:np.ndarray, 
+                 kind='linear') -> np.ndarray:
+    try:
+        from scipy.interpolate import interp1d
+        f = interp1d(x, y, kind=kind, axis=0, 
+                     assume_sorted=True, #speed up
+                     bounds_error=False) 
+        return f(new_x)                
+    except ImportError as e:
+        if kind != 'linear':
+            raise e
+        else:
+            return np.interp(new_x, xp=x, fp=y, left=np.NaN, right=np.NaN)
+        
 def _sync_timestamps(streams, kind='linear'):    
     '''syncs all streams to the fastest sampling rate by shifting or 
     upsampling 
@@ -607,8 +620,7 @@ def _sync_timestamps(streams, kind='linear'):
     For string formats, events are shifted towards the nearest feasible 
     timepoint. Any time-stamps without a marker get then assigned an empty
     marker, i.e. [''].    
-    '''
-    from scipy.interpolate import interp1d
+    '''    
     # selecting the stream with the highest effective sampling rate
     srate_key = 'effective_srate'        
     srates = [stream['info'][srate_key] for stream in streams.values()]
@@ -680,11 +692,8 @@ def _sync_timestamps(streams, kind='linear'):
             # zone with NaNs 
             y = stream['time_series']
             x = stream['time_stamps']
-            f = interp1d(x, y, kind=kind, axis=0, 
-                         assume_sorted=True, #speed up
-                         bounds_error=False) 
-            
-            stream['time_series'] = f(new_timestamps)
+       
+            stream['time_series'] = _interpolate(x, y, new_timestamps, kind)
             stream['time_stamps'] = new_timestamps
 
             if channel_format in ['int8', 'int16', 'int32', 'int64']:
