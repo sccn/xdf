@@ -58,8 +58,11 @@ def load_xdf(filename,
 
         sync_timestamps: {bool str}
             sync timestamps of all streams sample-wise with the stream to the 
-            highest effective sampling rate. Using sync_timestamps method has
-            a dependency on scipy, which is not a hard requirement of pyxdf.
+            highest effective sampling rate. Using sync_timestamps with any 
+            method other than linear has dependency on scipy, which is not a
+            hard requirement of pyxdf. If scipy is not installed in your 
+            environment, the method supports linear interpolation with
+            numpy.
             
             False -> no syncing
             True -> linear syncing
