@@ -12,7 +12,6 @@ import gzip
 import xml.etree.ElementTree as ET
 from collections import OrderedDict, defaultdict
 import logging
-from scipy.interpolate import interp1d
 import numpy as np
 
 __all__ = ['load_xdf']
@@ -59,13 +58,14 @@ def load_xdf(filename,
 
         sync_timestamps: {bool str}
             sync timestamps of all streams sample-wise with the stream to the 
-            highest effective sampling rate
+            highest effective sampling rate. Using sync_timestamps method has
+            a dependency on scipy, which is not a hard requirement of pyxdf.
             
             False -> no syncing
             True -> linear syncing
             str:<'linear’, ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic’, ‘cubic’, 
             ‘previous’, ‘next’> for method inherited from  
-            scipy.interpolate.interp1d          
+            scipy.interpolate.interp1d.  
         
         overlap_timestamps: bool
             If true, return only overlapping streams, i.e. all streams
@@ -608,7 +608,7 @@ def _sync_timestamps(streams, kind='linear'):
     timepoint. Any time-stamps without a marker get then assigned an empty
     marker, i.e. [''].    
     '''
-    
+    from scipy.interpolate import interp1d
     # selecting the stream with the highest effective sampling rate
     srate_key = 'effective_srate'        
     srates = [stream['info'][srate_key] for stream in streams.values()]
