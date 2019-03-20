@@ -180,6 +180,19 @@ def load_xdf(filename,
             self.srate = round(float(xml['info']['nominal_srate'][0]))
             # format string (int8, int16, int32, float32, double64, string)
             self.fmt = xml['info']['channel_format'][0]
+            self.numpy_fmt = None
+            if self.fmt == 'int8':
+                self.numpy_fmt = np.int8
+            elif self.fmt == 'int16':
+                self.numpy_fmt = np.int16
+            elif self.fmt == 'int32':
+                self.numpy_fmt = np.int32
+            elif self.fmt == 'int64':
+                self.numpy_fmt = np.int64
+            elif self.fmt == 'float32':
+                self.numpy_fmt = np.float32
+            elif self.fmt == 'double64':
+                self.numpy_fmt = np.float64
             # list of time-stamp chunks (each an ndarray, in seconds)
             self.time_stamps = []
             # list of time-series chunks (each an ndarray or list of lists)
@@ -288,7 +301,7 @@ def load_xdf(filename,
                                 values[k][ch] = raw.decode(errors='replace')
                     else:
                         # read a sample comprised of numeric values
-                        values = np.zeros((nsamples, temp[StreamId].nchns))
+                        values = np.zeros((nsamples, temp[StreamId].nchns), dtype=temp[StreamId].numpy_fmt)
                         # for each sample...
                         for k in range(nsamples):
                             # read or deduce time stamp
@@ -343,7 +356,7 @@ def load_xdf(filename,
             if stream.fmt == 'string':
                 stream.time_series = []
             else:
-                stream.time_series = np.zeros((stream.nchns, 0))
+                stream.time_series = np.zeros((stream.nchns, 0), dtype=stream.numpy_fmt)
 
     # perform (fault-tolerant) clock synchronization if requested
     if synchronize_clocks:
