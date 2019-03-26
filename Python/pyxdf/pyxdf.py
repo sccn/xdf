@@ -373,8 +373,6 @@ def load_xdf(filename,
         stream['time_stamps'] = tmp.time_stamps
 
     streams = [s for s in streams.values()]
-    sort_data = [s['info']['name'][0] for s in streams]
-    streams = [x for _, x in sorted(zip(sort_data, streams))]
     return streams, fileheader
 
 
