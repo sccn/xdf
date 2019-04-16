@@ -12,3 +12,5 @@ The XDF concept and beta version was developed by Christian Kothe and Clemens Br
 The XDF specification is outlined in the home repository at https://github.com/sccn/xdf . As of late april 2019, XDF readers, writers, and associated tools can be found in the https://github.com/xdf-modules organization.
 
 The most popular XDF importers (for Python, Matlab, and EEGLAB) are linked in the home repository as submodules. For this reason, if your intention is to download xdf and its implementations then you shouldn't use the green "Download" button in GitHub (which doesn't download submodules), and when you clone the repository please be sure to use the `--recursive` flag.
+
+If you encounter any issues with any of the specific implementations, then please open an issue in the appropriate submodule repository. Opening issues in the submodule instead of the home repository will help make sure it is seen by the people who are best able to help. Issues in the home XDF repository should be limited to issues with the XDF specification itself, or when a submodule link needs to be updated.
