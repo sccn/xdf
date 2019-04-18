@@ -7,3 +7,6 @@
 [submodule "Python"]
 	path = Python
 	url = https://github.com/xdf-modules/xdf-Python.git
+[submodule "example-files"]
+	path = example-files
+	url = git@github.com:xdf-modules/example-files.git
