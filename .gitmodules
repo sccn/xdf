@@ -1,0 +1,9 @@
+[submodule "Matlab"]
+	path = Matlab
+	url = https://github.com/xdf-modules/xdf-Matlab.git
+[submodule "EEGLAB"]
+	path = EEGLAB
+	url = https://github.com/xdf-modules/xdf-EEGLAB.git
+[submodule "Python"]
+	path = Python
+	url = https://github.com/xdf-modules/xdf-Python.git
