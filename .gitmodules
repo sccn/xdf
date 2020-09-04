@@ -6,4 +6,7 @@
 	url = https://github.com/xdf-modules/xdf-EEGLAB.git
 [submodule "Python"]
 	path = Python
-	url = https://github.com/xdf-modules/xdf-Python.git
+    url = https://github.com/xdf-modules/xdf-Python.git
+[submodule "Julia"]
+    path = Julia
+    url = https://github.com/cbrnr/XDF.jl.git
