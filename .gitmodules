@@ -10,3 +10,6 @@
 [submodule "Julia"]
     path = Julia
     url = https://github.com/cbrnr/XDF.jl.git
+[submodule "Utilities/xdf-tagger"]
+	path = Utilities/xdf-tagger
+	url = https://github.com/xdf-modules/xdf-tagger.git
