@@ -8,5 +8,5 @@
 	path = Python
     url = https://github.com/xdf-modules/xdf-Python.git
 [submodule "Julia"]
-    path = Julia
-    url = https://github.com/cbrnr/XDF.jl.git
+	path = Julia
+	url = https://github.com/cbrnr/XDF.jl.git
