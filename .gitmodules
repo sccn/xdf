@@ -13,3 +13,6 @@
 [submodule "Utilities/xdf-tagger"]
 	path = Utilities/xdf-tagger
 	url = https://github.com/xdf-modules/xdf-tagger.git
+[submodule "example_files"]
+	path = example_files
+	url = https://github.com/xdf-modules/example-files.git
